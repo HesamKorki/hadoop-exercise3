@@ -1,0 +1,40 @@
+(a)
+The code for this part is in the file `InvertedIndex.java`:
+
+Mapper:
+I used regex to extract the document Id and the content, then 
+tokenized the content as instructed. Then I used a HashMap to 
+calculate the frequency of the tokens in the documen. Finally, 
+I used the token as the key of the mapper along with a string 
+"docId:tf" as the values emitted from the mapper.
+
+Reducer:
+In the reducer I just aggregate all the postings of a token 
+in a list, later sorting the list with a custom comparator 
+to sort based on the documentId within the token. 
+
+By activating the combiner for local aggregations I noticed better
+performance. The only point was that the output of reducer should be 
+compatible with its input, and since I've chosen Text to encompass the 
+TFs and also write to the output file, it worked for me.
+
+(b)
+The code for this part is in the file `SearchEngine.java`:
+
+main:
+I reserved the third argument for -search.keywords flag and after that 
+the program accepts any number of keywords that are separated by space.
+Then we set the keywords in the Configuration object.
+
+Mapper:
+First, we read the keywords from the Configuration. then we parse 
+each line of the output of the previous job to get the token and the 
+postings. If the token is present in the keywords we emit each of its 
+postings. 
+
+Reducer:
+Just the plain IntSumReducer works for this because the keys get joined 
+automatically. 
+
+I used this command to run the compiled code:
+hadoop jar SearchEngine.jar SearchEngine ../outA1/ ./out -search.keywords yellow wrote
