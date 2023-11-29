@@ -18,6 +18,8 @@ performance. The only point was that the output of reducer should be
 compatible with its input, and since I've chosen Text to encompass the 
 TFs and also write to the output file, it worked for me.
 
+------------------------------------------------------------------------
+
 (b)
 The code for this part is in the file `SearchEngine.java`:
 
@@ -38,3 +40,38 @@ automatically.
 
 I used this command to run the compiled code:
 hadoop jar SearchEngine.jar SearchEngine ../outA1/ ./out -search.keywords yellow wrote
+
+------------------------------------------------------------------------------------
+
+(c)
+This was a very interesting task. Using the pseudocode from the slides 
+I implemented the InvertedIndex leveraging hadoop secondary sorting in the 
+file `BetterInvertedIndex.java`. The main difference is that we emit pair of
+(token, docId) with a value of tf from the mapper and then build the postings 
+in the reducer which results in an automatically sorted postings by docId.
+
+For the search engine part, there's no difference and the same program runs pretty smoothly 
+on the output of this one as well.
+
+I ran both of the algorithms on AA sub directory @ hpc: (these were ran on different pwd(1c,1a))
+
+time hadoop jar BetterInvertedIndex.jar BetterInvertedIndex ~/Wikipedia-En-41784-Articles/AA/ ./out
+time hadoop jar InvertedIndex.jar InvertedIndex ~/Wikipedia-En-41784-Articles/AA/ ./out
+
+The secondary index algorithm outperforms the naive one even without using a combiner: 52seconds vs 57seconds
+
+Then I rand the search engine with the same keywords on each of the outputs to check the validity:
+
+hadoop jar SearchEngine.jar SearchEngine ../1a/out/ ./outA1 -search.keywords yellow wrote
+hadoop jar SearchEngine.jar SearchEngine ../1c/out/ ./outC1 -search.keywords yellow wrote
+
+diff outA1/part-r-00000 outC1/part-r-00000
+
+didn't output anything which fortunately meant the files are identical :D
+
+The main advantage of this approach is that we can deal with postings that don't fit into memory.
+we cannot use the reducer simply as the combiner for the second algorithm as we did for the first one 
+and the reason is that the input and output of reducer are not compatible. However, a HashPartitioner could be 
+very interesting for this reducer to give all the (t,docID) with the same token to a single reducer. This way 
+we wouldn't need to remember previous token. I think the join technique that is happening in this one 
+is reduce-side rather than map-side because the postings are created in the reducer.
