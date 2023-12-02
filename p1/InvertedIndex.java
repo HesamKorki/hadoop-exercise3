@@ -77,7 +77,7 @@ public class InvertedIndex {
 			Comparator<String> idComparator = new Comparator<String>() {
     			@Override
     			public int compare(String s1, String s2) {
-        			// Extract IDs from strings (assuming "id:count" format)
+
 					String id1 = s1.split(":")[0];
 					String id2 = s2.split(":")[0];
 					// Compare IDs as strings

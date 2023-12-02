@@ -1,0 +1,78 @@
+I started by installing Pig on hpc as intructed in moodle and I confirmed my installation 
+by getting a grunt console.
+
+(a)
+The Pig Latin script for this part is available in the file `PopDirector.pig`. 
+The code is commented but the general idea is to read principals, filter by director category, 
+count the occurance of each and then join by names data to get the respected names of the directors. 
+Please change the location of IMDB data files at the top of the script to point to the correct location.
+
+The result I got from running this script:
+
+nm1203430       Johnny Manahan          13092
+nm1966600       Nivedita Basu           12316
+nm8467983       Saibal Banerjee         11632
+nm1409127       Bert De Leon            10353
+nm1667633       Anil v Kumar            8961
+nm7867124       Santosh Bhatt           8458
+nm13220986      Conrado Lumabas         8023
+nm1083609       Danie Joubert           7981
+nm5236281       Silvia Abravanel        7434
+nm5239804       Malu London             7433
+nm5262331       Duma Ndlovu             7336
+nm0051678       Mário Márcio Bandarra   6943
+nm0554045       Henrique Martins        6923
+nm0022750       Paul Alter              6509
+nm5460792       Shashank Bali           6378
+nm0042771       Walter Avancini         6362
+nm0565214       Kevin McCarthy          6120
+nm15377238      Dilip Kumar             5950
+nm0723330       Atílio Riccó            5778
+nm2544856       Bruno De Paola          5734
+nm0273084       Jorge Fernando          5724
+nm0960965       Kaushik Ghatak          5718
+nm1402433       Louie Ignacio           5625
+nm7478784       Ajay Veermal            5467
+nm5727175       S. Kumaran              5449
+
+Which conforms to the results from 2(a)
+
+-------------------------------------------------------------------
+
+(b)
+The Pig Latin script for this part is available in the file `topCoActors.pig`. 
+The code is commented in the effort to make it self-explanatory but I also joined with 
+the title.basics to get only the movie type, otherwise, we'd get enormours numbers due to 
+TV shows with thousands of episodes :)))
+
+The results I got were different from the one we got in ex#1 and after checking 
+I realized it is due to the fact that we used to filter out movies based on ratings 
+when creating the fact table in that exercise.
+
+Here are the results I got after running the pig script:
+
+Adoor Bhasi             Bahadur                 171
+Matsunosuke Onoe        Kijaku Ôtani            147
+Matsunosuke Onoe        Kitsuraku Arashi        126
+Adoor Bhasi             Jayabharathi            125
+Adoor Bhasi             Prem Nazir              125
+Matsunosuke Onoe        Suminojo Ichikawa       113
+Kijaku Ôtani            Kitsuraku Arashi        113
+Panchito                Dolphy                  104
+Suminojo Ichikawa       Kijaku Ôtani            101
+Suminojo Ichikawa       Kitsuraku Arashi        97
+Matsunosuke Onoe        Sen'nosuke Nakamura     97
+Ritoku Arashi           Hôshô Bandô             96
+Enshô Jitsukawa         Ritoku Arashi           90
+Enshô Jitsukawa         Hôshô Bandô             86
+Bahadur                 Jayabharathi            84
+Adoor Bhasi             Paravoor Bharathan      84
+Sen'nosuke Nakamura     Kijaku Ôtani            84
+Paquito Diaz            Fernando Poe Jr.        81
+Mohammad Ali            Brahmanandam            80
+Kaichi Yamamoto         Takeo Azuma             74
+Ritoku Arashi           Shôzô Arashi            73
+Mustafa Qureshi         Sultan Rahi             73
+K.S. Ashwath            T.N. Balakrishna        72
+Rajkumar                T.N. Balakrishna        72
+Sen'nosuke Nakamura     Kitsuraku Arashi        71
