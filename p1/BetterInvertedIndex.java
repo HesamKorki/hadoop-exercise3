@@ -20,6 +20,7 @@ import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
@@ -57,6 +58,18 @@ public class BetterInvertedIndex {
                 count.set(String.valueOf(tokenCount.get(token)));
 				context.write(word, count);
 			}
+		}
+	}
+
+	public static class TermPartitioner extends Partitioner<Text, IntWritable> {
+
+
+		@Override
+		public int getPartition(Text key, IntWritable value, int numReduceTasks) {
+			
+			String term = key.toString().split("\\$")[0]; 
+
+			return Math.abs(term.hashCode()) % numReduceTasks;
 		}
 	}
 
@@ -113,6 +126,7 @@ public class BetterInvertedIndex {
 
 		job.setMapperClass(IdfMapper.class);
 		job.setReducerClass(IntSumReducer.class);
+		job.setPartitionerClass(TermPartitioner.class);
         
 		job.setOutputKeyClass(Text.class);
 		job.setOutputValueClass(Text.class);
