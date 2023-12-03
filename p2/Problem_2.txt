@@ -1,487 +1,70 @@
-Problem #2
-----------
+(a)
 
-(a) Select the most popular directors based on how many movies they directed, stop after the top 25 directors with the most movies.
+The code for this part can be found in `PopularDir.java`.
 
-# Step 1: Create the Java code to take input from both name and principals files and generate an output file with the director names and their occurences in movies
+We have two jobs for this task, first counts the occurance of directors, and the second one 
+just joins the directorId with the names to find their respected names.
 
-import java.io.IOException;
+Job1:
+(Mapper) DirCounter: finds directors based on the category and produces a 1 for each id.
+(Reducer) DirIdReducer: sums the occurences of each director Id.
 
-import javax.naming.Context;
+Job2:
+(Mapper) DirectorJoinMapper: if the input is the names file, we prefix the values with $ to to distinguish later
+(Reducer) DirectorJoinReducer: if the values start with $, then it's a name that we should write otherwise it's the count
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
-public class PopularDirectors {
+hadoop jar PopularDirectors.jar PopularDirectors ~/title.principals.tsv ~/name.basics.tsv ./out-dir-count ./out-results
 
-    // Step 1: A job that counts the occurrences of director IDs in the principals file using same logic as WordCount with MR
-    public static class DirectorIdCountMapper extends Mapper<Object, Text, Text, IntWritable> {
-        private final static IntWritable one = new IntWritable(1);
-        private Text directorId = new Text();
+sort -t $'\t' -k3 -rn ./out-results/part-r-* | head -n 25
 
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String[] parts = value.toString().split("\t");
-            if (parts.length >= 3) {
-                String category = parts[3].trim();
-                if (category.equals("director")) {
-                    String directorIdStr = parts[2].trim();
-                    directorId.set(directorIdStr);
-                    context.write(directorId, one);
-                }
-            }
-        }
-    }
-
-    public static class DirectorIdCountReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-        private IntWritable result = new IntWritable();
-
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
-                throws IOException, InterruptedException {
-            int sum = 0;
-            for (IntWritable val : values) {
-                sum += val.get();
-            }
-            result.set(sum);
-            context.write(key, result);
-        }
-    }
-
-    // Step 2: Join director IDs with director names using another job of MR
-    public static class DirectorJoinMapper extends Mapper<Object, Text, Text, Text> {
-        private Text directorId = new Text();
-        private Text directorName = new Text();
-        private Text directorCount = new Text();
-    
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String[] parts = value.toString().split("\t");
-            // Check if it's the name.basics.tsv file
-            if (parts.length != 2) {
-                String id = parts[0].trim();
-                String name = parts[1].trim();
-                directorId.set(id);
-                // Add '*' prefix to indicate director name 
-                directorName.set("*" + name);   
-                context.write(directorId, directorName);
-            }
-            // If it's the output of the first reducer we take the count
-            else {
-                String id = parts[0].trim();
-                String count = parts[1].trim();
-                directorId.set(id);
-                // No '*' prefix to separate count from director name 
-                directorCount.set(count);
-                context.write(directorId, directorCount);
-            }
-        }
-    }
-
-    public static class DirectorJoinReducer extends Reducer<Text, Text, Text, Text> {
-        private Text result = new Text();
-    
-        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            String directorName = null;
-            int count = 0;
-    
-            for (Text val : values) {
-                String valueStr = val.toString();
-                if (valueStr.startsWith("*")) {
-                    // Remove the '*' prefix
-                    directorName = valueStr.substring(1); 
-                } 
-                else {
-                     count += Integer.parseInt(valueStr);
-                }
-            }
-    
-            if (directorName != null) {
-                result.set(directorName + "\t" + count);
-                context.write(key, result);
-            }
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        Configuration conf1 = new Configuration();
-        Job job1 = Job.getInstance(conf1, "director count");
-        job1.setJarByClass(PopularDirectors.class);
-        job1.setMapperClass(DirectorIdCountMapper.class);
-        job1.setCombinerClass(DirectorIdCountReducer.class);
-        job1.setReducerClass(DirectorIdCountReducer.class);
-        job1.setOutputKeyClass(Text.class);
-        job1.setOutputValueClass(IntWritable.class);
-        FileInputFormat.addInputPath(job1, new Path(args[0])); // Input: title.principals.tsv
-        FileOutputFormat.setOutputPath(job1, new Path(args[2])); // Output: output/directorCount
-
-        if (!job1.waitForCompletion(true)) {
-            System.exit(1);
-        }
-
-        Configuration conf2 = new Configuration();
-        Job job2 = Job.getInstance(conf2, "director join");
-        job2.setJarByClass(PopularDirectors.class);
-        job2.setMapperClass(DirectorJoinMapper.class);
-        job2.setReducerClass(DirectorJoinReducer.class);
-        job2.setOutputKeyClass(Text.class);
-        job2.setOutputValueClass(Text.class);
-        FileInputFormat.addInputPaths(job2, args[1] + "," + args[2]); // Input: Output of job1 (output/directorCount) and name.basics.tsv
-        FileOutputFormat.setOutputPath(job2, new Path(args[3])); // Output: output/directorJoin
-        System.exit(job2.waitForCompletion(true) ? 0 : 1);
-    }
-}
-
-# Step 2: We copy the java file into IRIS
-
-scp -P 8022 PopularDirectors.java <yourlogin>@access-iris.uni.lu:~/
-
-# Step 3: Connect to the server and open an interactive shell 
-
-ssh -p 8022 <yourlogin>@access-iris.uni.lu
-si 
-
-# Step 4: Create a folder to group all input files
-
-mkdir tsv_files 
-
-# Step 5: from your local machine, open a new terminal window on the folder containing the input files and copy them to the server using these commands
-
-scp -P 8022 name.basics.tsv <yourlogin>@access-iris.uni.lu:~/tsv_files/
-scp -P 8022 title.principals.tsv <yourlogin>@access-iris.uni.lu:~/tsv_files
-scp -P 8022 title.basics.tsv <yourlogin>@access-iris.uni.lu:~/tsv_files
-
-# Step 6: Back on the server, export environment variables (we assume you have Java and Hadoop loaded and Java is exported from previous exercise) 
-
-module load lang/Java/1.8.0_241
-export JAVA_HOME=/opt/apps/resif/iris-rhel8/2020b/broadwell/software/Java/1.8.0_241/
-export HADOOP_HOME=~/hadoop-3.3.4
-export PATH=~/hadoop-3.3.4/bin:$PATH
-
-# Step 7: Java Compilation
-
-javac -classpath $HADOOP_HOME/share/hadoop/common/hadoop-common-3.3.4.jar:$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-client-core-3.3.4.jar:$HADOOP_HOME/share/hadoop/common/lib/commons-logging-1.1.3.jar PopularDirectors.java
-jar -cvf PopularDirectors.jar *.class
-
-# Step 8: Run the PopularDirectors with Hadoop using two input files tsv_files/title.principals.tsv and tsv_files/name.basics.tsv as inputs, and using two output folders, one for the first job and one for the second
-
-hadoop jar PopularDirectors.jar PopularDirectors tsv_files/title.principals.tsv tsv_files/name.basics.tsv output/directorCount output/directorJoin
-
-# Step 9: Check the output
-
-sort -t $'\t' -k3 -rn output/directorJoin/part-r-* | head -n 25
-
-# Step 10: The following are the results in order (from most to less frequent)
-
-nm1203430       Johnny Manahan  13087
-nm1966600       Nivedita Basu   12316
-nm8467983       Saibal Banerjee 11563
-nm1409127       Bert De Leon    10353
-nm1667633       Anil v Kumar    8961
-nm7867124       Santosh Bhatt   8458
-nm13220986      Conrado Lumabas 8023
-nm1083609       Danie Joubert   7959
+nm1203430       Johnny Manahan          13087
+nm1966600       Nivedita Basu           12316
+nm8467983       Saibal Banerjee         11563
+nm1409127       Bert De Leon            10353
+nm1667633       Anil v Kumar            8961
+nm7867124       Santosh Bhatt           8458
+nm13220986      Conrado Lumabas         8023
+nm1083609       Danie Joubert           7959
 nm5236281       Silvia Abravanel        7434
-nm5239804       Malu London     7433
-nm5262331       Duma Ndlovu     7336
+nm5239804       Malu London             7433
+nm5262331       Duma Ndlovu             7336
 nm0051678       Mário Márcio Bandarra   6943
 nm0554045       Henrique Martins        6923
-nm1760906       Bobet Vidanes   6554
-nm0022750       Paul Alter      6509
-nm5460792       Shashank Bali   6378
-nm0042771       Walter Avancini 6191
-nm0565214       Kevin McCarthy  6120
-nm0723330       Atílio Riccó    5778
-nm2544856       Bruno De Paola  5734
-nm0960965       Kaushik Ghatak  5718
-nm0273084       Jorge Fernando  5699
-nm1402433       Louie Ignacio   5594
-nm7478784       Ajay Veermal    5467
-nm5727175       S. Kumaran      5449
+nm1760906       Bobet Vidanes           6554
+nm0022750       Paul Alter              6509
+nm5460792       Shashank Bali           6378
+nm0042771       Walter Avancini         6191
+nm0565214       Kevin McCarthy          6120
+nm0723330       Atílio Riccó            5778
+nm2544856       Bruno De Paola          5734
+nm0960965       Kaushik Ghatak          5718
+nm0273084       Jorge Fernando          5699
+nm1402433       Louie Ignacio           5594
+nm7478784       Ajay Veermal            5467
+nm5727175       S. Kumaran              5449
 
-------------------
-------------------
+----------------------------------------------------------------------
 
-(b) Select the top 25 pairs of actors that occur together in a same movie, ordered by the number of movies in which they co-occur.
+(b) 
+The code for this part can be found in `CoActors.java`.
+We have again two mapreduce jobs for this task. The first one would create unique pairs of actors 
+and the second one just counts the distinct pairs.
 
-#Step 0: Define the approach
+Job1:
+(setup): In order to only keep movies we need to read the file 'title.basics' and keep the tid and tType in memory.
+(Mapper) MovieMapper: if the titleType is movie and category is acting, we emit the titleId as the key and the actorId 
+                      this way we would get all the people casting in the same movie in the reducer.
 
-For this problem we will be using 2 mapReduce jobs. 
-In the first MR job, the mapper will map each title id (tconst) to an actor id using the title.principals.tsv as input
-The mapper will check for each title if it is also categorized as 'movie' in the title.basics.tsv before adding it as a key.
-The reducer of our first MR job will then take the result of the map and transform it into pairs of actors that have the same title as a key
-The output of this reducer will then be used as an input to our second MR job.
-For our second MR job we will take the pairs of actors who participated in the same movie as a key and add 1 (one) as a value.
-The reducer of our second MR job will then take care of counting occurences of each pair by summing the values of each key.
+(Reducer) MakePairsReducer: Going through all the casts of a movie, it generates unique pairs of actors.
 
-#Step 1: Create the java code for the first MR job and save it as ActorPairs.java
+Job2:
+It really is a simple mapreduce that counts the distinct number of pairs generated by the previous job.
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import javax.naming.Context;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.io.LongWritable;
 
-// First MR job that creates pairs of actors that have participated together in a movie
-public class ActorPairs {
+hadoop jar CoActors.jar CoActors ~/title.principals.tsv ~/title.basics.tsv actor-pairs
 
-    // Step 1: Mapper to map ids of actors and ids of movies
-    public static class ActorTitleMapper extends Mapper<LongWritable, Text, Text, Text> {
-        private Text actorId = new Text();
-        private Text titleId = new Text();
-        private Map<String, String> titleTypeMap = new HashMap<>();
-
-        // Create a setup function that maps titles to their type which will help us check later if they are movies
-        @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-            // Load title.basics.tsv into memory, note that the path to title basics is provided as an arg from main
-            try (BufferedReader br = new BufferedReader(new FileReader(context.getConfiguration().get("titleBasicsPath")))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    String[] parts = line.split("\t");
-                    if (parts.length >= 2) {
-                        String tconst = parts[0].trim();
-                        String titleType = parts[1].trim();
-                        // Mapping each title to its type
-                        titleTypeMap.put(tconst, titleType);
-                    }
-                }
-            }
-        }
-
-        // Here we map a title id and the id of an actor that participated in the movie
-        @Override
-        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-            String[] parts = value.toString().split("\t");
-            if (parts.length >= 3) {
-                String category = parts[3].trim();
-
-                // checking if the category is actor/actress
-                if (category.equals("actor") || category.equals("actress")) {
-                    String actorIdStr = parts[2].trim();
-                    String titleIdStr = parts[0].trim();
-
-                    // Check if tconst is of type "movie" in title.basics.tsv using our setup from earlier
-                    if (titleTypeMap.containsKey(titleIdStr) && titleTypeMap.get(titleIdStr).equals("movie")) {
-                        actorId.set(actorIdStr);
-                        titleId.set(titleIdStr);
-                        // Map each title to an actor that participated in it
-                        context.write(titleId, actorId);
-                    }
-                }
-            }
-        }
-    }
-
-    // Reducer to create pairs of actors that had the same movie as a key
-    public static class ActorPairReducer extends Reducer<Text, Text, Text, Text> {
-        public void reduce(Text key, Iterable<Text> values, Context context)
-                throws IOException, InterruptedException {
-            List<String> actors = new ArrayList<>();
-    
-            // Collect the actors for the current movie
-            for (Text value : values) {
-                actors.add(value.toString());
-            }
-    
-            // Generate unique pairs of actors who were in the same movie
-            for (int i = 0; i < actors.size(); i++) {
-                for (int j = i + 1; j < actors.size(); j++) {
-                    String actor1 = actors.get(i);
-                    String actor2 = actors.get(j);
-    
-                    // Ensure the pair is sorted to handle pairs in any order
-                    String sortedPair = actor1.compareTo(actor2) < 0 ? actor1 + "\t" + actor2 : actor1 + "\t" + actor2;
-                    context.write(new Text(sortedPair), new Text(""));
-                }
-            }
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        if (args.length != 3) {
-            System.err.println("Usage: ActorPairs <inputPath> <titleBasicsPath> <outputPath>");
-            System.exit(1);
-        }
-
-        Configuration conf1 = new Configuration();
-        Job job1 = Job.getInstance(conf1, "ActorPairs");
-
-        // passing the path to title.basics.tsv as our second argument
-        job1.getConfiguration().set("titleBasicsPath", args[1]);
-
-        job1.setJarByClass(ActorPairs.class);
-
-        // passing the path to title.principles.tsv as our first argument
-        FileInputFormat.addInputPath(job1, new Path(args[0]));
-
-        job1.setMapperClass(ActorTitleMapper.class);
-        job1.setMapOutputKeyClass(Text.class);
-        job1.setMapOutputValueClass(Text.class);
-
-        job1.setReducerClass(ActorPairReducer.class);
-        job1.setOutputKeyClass(Text.class);
-        job1.setOutputValueClass(Text.class);
-
-        // passing the output path as our last/third argument
-        FileOutputFormat.setOutputPath(job1, new Path(args[2]));
-
-        System.exit(job1.waitForCompletion(true) ? 0 : 1);
-    }
-}
-
-#Step 2: We copy the java file into IRIS
-
-scp -P 8022 ActorPairs.java <yourlogin>@access-iris.uni.lu:~/
-
-#Step 3: Java Compilation (we assume you have Java and Hadoop loaded and paths exported from previous exercise)
-
-javac -classpath $HADOOP_HOME/share/hadoop/common/hadoop-common-3.3.4.jar:$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-client-core-3.3.4.jar:$HADOOP_HOME/share/hadoop/common/lib/commons-logging-1.1.3.jar ActorPairs.java
-jar -cvf ActorPairs.jar *.class
-
-#Step 4: Run ActorPairs MR job with hadoop using the path to title.principals.tsv as first argument, path to title.basics.tsv as second argument and the output folder as a third argument (we assume here the input files are stored in a folder tsv_files)
-
-hadoop jar ActorPairs.jar ActorPairs tsv-files/title.principals.tsv tsv-files/title.basics.tsv actor_pairs
-
-#Step 5: Check the output to see if everything is fine
-
-cat actor_pairs/part-r-* | head -n 10
-
-#Step 6: Create the code for the second MR job and save it as PairsCount.java
-
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import javax.naming.Context;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.io.LongWritable;
-
-// This is the second MR job that takes as input, the output of the first MR job
-public class PairsCount {
-
-    // In this mapper we will map the actor pairs to one
-    public static class PairCountMapper extends Mapper<Object, Text, Text, IntWritable> {
-
-        private final static IntWritable one = new IntWritable(1);
-        private Text actorPair = new Text();
-    
-        @Override
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            // Assuming the input format is "Actor1\tActor2"
-            String[] actors = value.toString().trim().split("\t");
-    
-            if (actors.length == 2) {
-                // extract the actor pairs
-                String actor1 = actors[0];
-                String actor2 = actors[1];
-                
-                // format the actors par
-                actorPair.set(actor1 + "\t" + actor2);
-
-                // use the pair as a key and one as value
-                context.write(actorPair, one);
-            }
-        }
-    }
-    
-    // The reducer will then sum the 1s for each key (pair of actor) result will be the occurences of each actors pair across movies 
-    public static class PairCountReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-
-        private IntWritable result = new IntWritable();
-    
-        @Override
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
-                throws IOException, InterruptedException {
-            int sum = 0;
-    
-            // Sum the occurrences of each pair
-            for (IntWritable value : values) {
-                sum += value.get();
-            }
-    
-            result.set(sum);
-            context.write(key, result);
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            System.err.println("Usage: PairsCount <inputPath> <outputPath>");
-            System.exit(1);
-        }
-
-        Configuration conf2 = new Configuration();
-        Job job2 = Job.getInstance(conf2, "PairsCount");
-
-        job2.setJarByClass(PairsCount.class);
-
-        FileInputFormat.addInputPath(job2, new Path(args[0]));
-
-        job2.setMapperClass(PairCountMapper.class);
-        job2.setMapOutputKeyClass(Text.class);
-        job2.setMapOutputValueClass(IntWritable.class);
-
-        job2.setReducerClass(PairCountReducer.class);
-        job2.setOutputKeyClass(Text.class);
-        job2.setOutputValueClass(IntWritable.class);
-
-        FileOutputFormat.setOutputPath(job2, new Path(args[1]));
-
-        System.exit(job2.waitForCompletion(true) ? 0 : 1);
-    }
-}
-
-#Step 7: We copy the java file into IRIS
-
-scp -P 8022 PairsCount.java <yourlogin>@access-iris.uni.lu:~/
-
-#Step 8: Java Compilation
-
-javac -classpath $HADOOP_HOME/share/hadoop/common/hadoop-common-3.3.4.jar:$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-client-core-3.3.4.jar:$HADOOP_HOME/share/hadoop/common/lib/commons-logging-1.1.3.jar PairsCount.java
-jar -cvf PairsCount.jar *.class
-
-#Step 9: Run PairsCount MR job with hadoop using the output from the previous MR job as first argument (our input), and the output folder as a third argument
-
-hadoop jar PairsCount.jar PairsCount actor_pairs/part-r-00000 pairs_count
-
-#Step 10: Return the 25 most frequent pairs of actors using the following unix command
-
-sort -t $'\t' -k3 -rn pairs_count/part-r-* | head -n 25
-
-#Step 11: Check the output 
+sort -t $'\t' -k3 -rn actor-pairs/part-r-* | head -n 25 
 
 nm0006982       nm0046850       171
 nm0648803       nm2082516       147
@@ -509,299 +92,17 @@ nm0004660       nm3183374       72
 nm1154608       nm3183374       72
 nm1770187       nm2373718       71
 
-===================================================
+-------------------------------------------------------------
 
-(c) Find frequent 2-itemsets of actors or directors who occurred together in at least 4 movies.
+(c)
 
-#Step 0: Define the approach
+I used the same code as `CoActors.java` and just modified the following lines 
+to also include directors:
 
-For this problem we will be using the same approach as the one above except that this time we will be taking into account directors.
-In the last step, instead of taking 25 records we will also return all pairs with more than 4 movies.
+if (category.equals("actor") || category.equals("actress") || category.equals("director))
 
-#Step 1: Create the java code for the first MR job and save it as ActorPairs.java
+Then run it with the following: 
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import javax.naming.Context;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.io.LongWritable;
+hadoop jar CoActors.jar CoActors ~/title.principals.tsv ~/title.basics.tsv ./actor-pairs
 
-// First MR job that creates pairs of actors/directors that have participated together in a movie
-public class ArtistPairs {
-
-    // Step 1: Mapper to map ids of actors and ids of movies
-    public static class ArtistTitleMapper extends Mapper<LongWritable, Text, Text, Text> {
-        private Text artistId = new Text();
-        private Text titleId = new Text();
-        private Map<String, String> titleTypeMap = new HashMap<>();
-
-        // Create a setup function that maps titles to their type which will help us check later if they are movies
-        @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-            // Load title.basics.tsv into memory, note that the path to title basics is provided as an arg from main
-            try (BufferedReader br = new BufferedReader(new FileReader(context.getConfiguration().get("titleBasicsPath")))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    String[] parts = line.split("\t");
-                    if (parts.length >= 2) {
-                        String tconst = parts[0].trim();
-                        String titleType = parts[1].trim();
-                        // Mapping each title to its type
-                        titleTypeMap.put(tconst, titleType);
-                    }
-                }
-            }
-        }
-
-        // Here we map a title id and the id of an actor that participated in the movie
-        @Override
-        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-            String[] parts = value.toString().split("\t");
-            if (parts.length >= 3) {
-                String category = parts[3].trim();
-
-                // checking if the category is actor/actress/director
-                if (category.equals("actor") || category.equals("actress") || category.equals("director")) {
-                    String artistIdStr = parts[2].trim();
-                    String titleIdStr = parts[0].trim();
-
-                    // Check if tconst is of type "movie" in title.basics.tsv using our setup from earlier
-                    if (titleTypeMap.containsKey(titleIdStr) && titleTypeMap.get(titleIdStr).equals("movie")) {
-                        artistId.set(artistIdStr);
-                        titleId.set(titleIdStr);
-                        // Map each title to an actor that participated in it
-                        context.write(titleId, artistId);
-                    }
-                }
-            }
-        }
-    }
-
-    // Reducer to create pairs of actors/directors that had the same movie as a key
-    public static class PairReducer extends Reducer<Text, Text, Text, Text> {
-        public void reduce(Text key, Iterable<Text> values, Context context)
-                throws IOException, InterruptedException {
-            List<String> artists = new ArrayList<>();
-    
-            // Collect the actors for the current movie
-            for (Text value : values) {
-                artists.add(value.toString());
-            }
-    
-            // Generate unique pairs of actors who were in the same movie
-            for (int i = 0; i < artists.size(); i++) {
-                for (int j = i + 1; j < artists.size(); j++) {
-                    String artist1 = artists.get(i);
-                    String artist2 = artists.get(j);
-    
-                    // Ensure the pair is sorted to handle pairs in any order
-                    String sortedPair = artist1.compareTo(artist2) < 0 ? artist1 + "\t" + artist2 : artist1 + "\t" + artist2;
-                    context.write(new Text(sortedPair), new Text(""));
-                }
-            }
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        if (args.length != 3) {
-            System.err.println("Usage: ArtistPairs <inputPath> <titleBasicsPath> <outputPath>");
-            System.exit(1);
-        }
-
-        Configuration conf1 = new Configuration();
-        Job job1 = Job.getInstance(conf1, "ArtistPairs");
-
-        // passing the path to title.basics.tsv as our second argument
-        job1.getConfiguration().set("titleBasicsPath", args[1]);
-
-        job1.setJarByClass(ArtistPairs.class);
-
-        // passing the path to title.principles.tsv as our first argument
-        FileInputFormat.addInputPath(job1, new Path(args[0]));
-
-        job1.setMapperClass(ArtistTitleMapper.class);
-        job1.setMapOutputKeyClass(Text.class);
-        job1.setMapOutputValueClass(Text.class);
-
-        job1.setReducerClass(PairReducer.class);
-        job1.setOutputKeyClass(Text.class);
-        job1.setOutputValueClass(Text.class);
-
-        // passing the output path as our last/third argument
-        FileOutputFormat.setOutputPath(job1, new Path(args[2]));
-
-        System.exit(job1.waitForCompletion(true) ? 0 : 1);
-    }
-}
-
-#Step 2: We copy the java file into IRIS
-
-scp -P 8022 ArtistPairs.java <yourlogin>@access-iris.uni.lu:~/
-
-#Step 3: Java Compilation (we assume you have Java and Hadoop loaded and Java is exported from previous exercise) 
-
-javac -classpath $HADOOP_HOME/share/hadoop/common/hadoop-common-3.3.4.jar:$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-client-core-3.3.4.jar:$HADOOP_HOME/share/hadoop/common/lib/commons-logging-1.1.3.jar ArtistPairs.java
-jar -cvf ArtistPairs.jar *.class
-
-#Step 4: Run ArtistPairs MR job with hadoop using the path to title.principals.tsv as first argument, path to title.basics.tsv as second argument and the output folder as a third argument (we assume here the input files are stored in a folder tsv_files)
-
-hadoop jar ArtistPairs.jar ArtistPairs tsv-files/title.principals.tsv tsv-files/title.basics.tsv artist_pairs
-
-#Step 5: Check the output to see if everything is fine
-
-cat artist_pairs/part-r-* | head -n 10
-
-#Step 6: Create the code for the second MR job and save it as PairsCount.java
-
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import javax.naming.Context;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.io.LongWritable;
-
-// This is the second MR job that takes as input, the output of the first MR job
-public class ArtistPairsCount {
-
-    // In this mapper we will map the artiist pairs to one
-    public static class PairCountMapper extends Mapper<Object, Text, Text, IntWritable> {
-
-        private final static IntWritable one = new IntWritable(1);
-        private Text artistPair = new Text();
-    
-        @Override
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            // Assuming the input format is "Artist1\tArtist2"
-            String[] artists = value.toString().trim().split("\t");
-    
-            if (artists.length == 2) {
-                // extract the artist pairs
-                String artist1 = artists[0];
-                String artist2 = artists[1];
-                
-                // format the artist pair
-                artistPair.set(artist1 + "\t" + artist2);
-
-                // use the pair as a key and one as value
-                context.write(artistPair, one);
-            }
-        }
-    }
-    
-    // The reducer will then sum the 1s for each key (pair of actor) result will be the occurences of each actors pair across movies 
-    public static class PairCountReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-
-        private IntWritable result = new IntWritable();
-    
-        @Override
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
-                throws IOException, InterruptedException {
-            int sum = 0;
-    
-            // Sum the occurrences of each pair
-            for (IntWritable value : values) {
-                sum += value.get();
-            }
-    
-            result.set(sum);
-            context.write(key, result);
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            System.err.println("Usage: ArtistPairsCount <inputPath> <outputPath>");
-            System.exit(1);
-        }
-
-        Configuration conf2 = new Configuration();
-        Job job2 = Job.getInstance(conf2, "ArtistPairsCount");
-
-        job2.setJarByClass(ArtistPairsCount.class);
-
-        FileInputFormat.addInputPath(job2, new Path(args[0]));
-
-        job2.setMapperClass(PairCountMapper.class);
-        job2.setMapOutputKeyClass(Text.class);
-        job2.setMapOutputValueClass(IntWritable.class);
-
-        job2.setReducerClass(PairCountReducer.class);
-        job2.setOutputKeyClass(Text.class);
-        job2.setOutputValueClass(IntWritable.class);
-
-        FileOutputFormat.setOutputPath(job2, new Path(args[1]));
-
-        System.exit(job2.waitForCompletion(true) ? 0 : 1);
-    }
-}
-
-#Step 7: We copy the java file into IRIS
-
-scp -P 8022 ArtistPairsCount.java <yourlogin>@access-iris.uni.lu:~/
-
-#Step 8: Java Compilation
-
-javac -classpath $HADOOP_HOME/share/hadoop/common/hadoop-common-3.3.4.jar:$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-client-core-3.3.4.jar:$HADOOP_HOME/share/hadoop/common/lib/commons-logging-1.1.3.jar ArtistPairsCount.java
-jar -cvf ArtistPairsCount.jar *.class
-
-#Step 9: Run PairsCount MR job with hadoop using the output from the previous MR job as first argument (our input), and the output folder as a third argument
-
-hadoop jar ArtistPairsCount.jar ArtistPairsCount artist_pairs/part-r-00000 artist_pairs_count
-
-#Step 10: Return the most frequent two-item sets that have count higher than 4
-
-awk -F'\t' '$3 > 4' artist_pairs_count/part-r-00000
-
-#Sample from output
-
-nm5754072       nm1119536       7
-nm5756214       nm5724719       6
-nm5756214       nm6142895       6
-nm5766193       nm5989598       6
-nm5769673       nm4356119       5
-nm5771748       nm0874181       7
-nm5771748       nm6154512       6
-nm5775806       nm0047063       5
-nm5776577       nm3848412       5
-nm5794898       nm0043199       5
-nm5794898       nm1693209       5
-nm5796361       nm2794335       5
-nm5810608       nm2408461       5
-nm5814502       nm5800516       5
-nm5814503       nm5800516       5
-nm5815769       nm7372568       6
-nm5815769       nm7372576       6
-nm5817336       nm6763608       6
-nm5823978       nm8218755       5
-nm5825872       nm0223504       5
-nm5825872       nm0249368       5
-nm5826668       
+sort -t $'\t' -k3 -rn ./actor-pairs/part-r-*

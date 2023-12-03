@@ -1,5 +1,7 @@
 import java.io.IOException;
 
+import javax.naming.Context;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
@@ -10,31 +12,28 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
-public class ActorFrequency {
+public class PopularDir {
 
-    public static class TokenizerMapper extends Mapper<Object, Text, Text, IntWritable> {
-
+    public static class DirCounter extends Mapper<Object, Text, Text, IntWritable> {
         private final static IntWritable one = new IntWritable(1);
-        private Text word = new Text();
+        private Text directorId = new Text();
 
-        @Override
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String line = value.toString();
-            String[] tokens = line.split("\t");
-            // nConst, primaryName, birthYear, deathYear, primaryProfession, knownForTitles
-            // 0    1           2          3          4                  5
-
-
-            // Emit actor ID and count
-            word.set(tokens[2]);
-            context.write(word, one);
+            String[] parts = value.toString().split("\t");
+            if (parts.length >= 3) {
+                String category = parts[3].trim();
+                if (category.equals("director")) {
+                    String dirId = parts[2].trim();
+                    directorId.set(dirId);
+                    context.write(directorId, one);
+                }
+            }
         }
     }
 
-    public static class IntSumReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+    public static class DirIdReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
         private IntWritable result = new IntWritable();
 
-        @Override
         public void reduce(Text key, Iterable<IntWritable> values, Context context)
                 throws IOException, InterruptedException {
             int sum = 0;
@@ -46,83 +45,84 @@ public class ActorFrequency {
         }
     }
 
-    public static class ActorNameMapper extends Mapper<Object, Text, Text, Text> {
-
-        private Text actorID = new Text();
-        private Text actorName = new Text();
-
-        @Override
+    public static class DirectorJoinMapper extends Mapper<Object, Text, Text, Text> {
+        private Text directorId = new Text();
+        private Text directorName = new Text();
+        private Text directorCount = new Text();
+    
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String line = value.toString();
-            String[] tokens = line.split("\t");
-
-            // Emit actor ID and actor name
-            actorID.set(tokens[0]);
-            actorName.set(tokens[1]);
-            context.write(actorID, actorName);
+            String[] parts = value.toString().split("\t");
+            // Check if it's the name.basics.tsv file
+            if (parts.length != 2) {
+                String id = parts[0].trim();
+                String name = parts[1].trim();
+                directorId.set(id);
+                // Add '$' prefix to separate count from director name
+                directorName.set("$" + name);   
+                context.write(directorId, directorName);
+            }
+            // If it's the output of the first reducer we take the count
+            else {
+                String id = parts[0].trim();
+                String count = parts[1].trim();
+                directorId.set(id);
+                // No '$' prefix to separate count from director name 
+                directorCount.set(count);
+                context.write(directorId, directorCount);
+            }
         }
     }
 
-    public static class JoinReducer extends Reducer<Text, Text, Text, Text> {
+    public static class DirectorJoinReducer extends Reducer<Text, Text, Text, Text> {
         private Text result = new Text();
-
-        @Override
-        public void reduce(Text key, Iterable<Text> values, Context context)
-                throws IOException, InterruptedException {
-            String actorName = null;
-            int frequencySum = 0;
-
+    
+        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            String directorName = null;
+            int count = 0;
+    
             for (Text val : values) {
-                String value = val.toString();
-                if (value.matches("\\d+")) {
-                    // It's a frequency value
-                    frequencySum += Integer.parseInt(value);
-                } else {
-                    // It's an actor name
-                    actorName = value;
+                String valueStr = val.toString();
+                if (valueStr.startsWith("$")) {
+                    // Remove the '$' prefix
+                    directorName = valueStr.substring(1); 
+                } 
+                else {
+                     count += Integer.parseInt(valueStr);
                 }
             }
-
-            if (actorName != null) {
-                // Emit actor ID, frequency, and actor name
-                result.set(frequencySum + "\t" + actorName);
+    
+            if (directorName != null) {
+                result.set(directorName + "\t" + count);
                 context.write(key, result);
             }
         }
     }
 
-
     public static void main(String[] args) throws Exception {
         Configuration conf1 = new Configuration();
-        Job job1 = Job.getInstance(conf1, "ActorFrequency");
-        job1.setJar("ActorFrequency.jar");
-
-        job1.setMapperClass(TokenizerMapper.class);
-        job1.setReducerClass(IntSumReducer.class);
-
+        Job job1 = Job.getInstance(conf1, "PopularDir-Job1");
+        job1.setJarByClass(PopularDir.class);
+        job1.setMapperClass(DirCounter.class);
+        job1.setCombinerClass(DirIdReducer.class);
+        job1.setReducerClass(DirIdReducer.class);
         job1.setOutputKeyClass(Text.class);
         job1.setOutputValueClass(IntWritable.class);
-
         FileInputFormat.addInputPath(job1, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job1, new Path("temp-output"));
+        FileOutputFormat.setOutputPath(job1, new Path(args[2])); 
 
-        job1.waitForCompletion(true);
+        if (!job1.waitForCompletion(true)) {
+            System.exit(1);
+        }
 
-        // Second Job for Join
         Configuration conf2 = new Configuration();
-        Job job2 = Job.getInstance(conf2, "ActorJoin");
-        job2.setJar("ActorFrequency.jar");
-
-        job2.setMapperClass(ActorNameMapper.class);
-        job2.setReducerClass(JoinReducer.class);
-
+        Job job2 = Job.getInstance(conf2, "PopularDir-Job2");
+        job2.setJarByClass(PopularDir.class);
+        job2.setMapperClass(DirectorJoinMapper.class);
+        job2.setReducerClass(DirectorJoinReducer.class);
         job2.setOutputKeyClass(Text.class);
         job2.setOutputValueClass(Text.class);
-
-        FileInputFormat.addInputPath(job2, new Path(args[1])); // Input is name.basics.tsv
-        FileInputFormat.addInputPath(job2, new Path("temp-output")); // Input is the output of the first job
-        FileOutputFormat.setOutputPath(job2, new Path(args[2])); // Output path for the final result
-
+        FileInputFormat.addInputPaths(job2, args[1] + "," + args[2]);
+        FileOutputFormat.setOutputPath(job2, new Path(args[3]));
         System.exit(job2.waitForCompletion(true) ? 0 : 1);
     }
 }
