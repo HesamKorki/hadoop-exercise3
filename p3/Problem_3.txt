@@ -76,3 +76,61 @@ Mustafa Qureshi         Sultan Rahi             73
 K.S. Ashwath            T.N. Balakrishna        72
 Rajkumar                T.N. Balakrishna        72
 Sen'nosuke Nakamura     Kitsuraku Arashi        71
+
+-------------------------------------------------------------------
+
+(c)
+The Pig Latin script for this part is available in the file `itemSet.pig`. 
+The code is very similar to the previous part, we just also kept the directors 
+along with actors and instead of limiting the top 25, we filtered out the ones 
+who had less than 4 as the co-count.
+
+The truncated results I got after running pig:
+
+Adoor Bhasi	        Bahadur	                    171
+Matsunosuke Onoe	Kijaku Ôtani	            147
+Jirô Yoshino	    Shirôgorô Sawamura	        147
+Shirô Nakagawa	    Ritoku Arashi	            136
+Matsunosuke Onoe	Kitsuraku Arashi	        126
+Adoor Bhasi	        Jayabharathi	            125
+Adoor Bhasi	        Prem Nazir	                125
+Matsunosuke Onoe	Suminojo Ichikawa	        113
+Kijaku Ôtani	    Kitsuraku Arashi	        113
+Panchito	        Dolphy	                    104
+Suminojo Ichikawa	Kijaku Ôtani	            101
+Kinya Ogawa	        Mayumi Sanjô	            98
+Matsunosuke Onoe	Sen'nosuke Nakamura	        97
+Suminojo Ichikawa	Kitsuraku Arashi	        97
+Ritoku Arashi	    Hôshô Bandô	                96
+Enshô Jitsukawa	    Ritoku Arashi	            90
+Enshô Jitsukawa	    Hôshô Bandô	                86
+Adoor Bhasi	        Paravoor Bharathan	        85
+Bahadur	            Jayabharathi	            84
+Paquito Diaz	    Fernando Poe Jr.	        84
+Sen'nosuke Nakamura	Kijaku Ôtani	            84
+Shirô Nakagawa	    Hôshô Bandô	                83
+Enshô Jitsukawa	    Shirô Nakagawa	            83
+Mohammad Ali	    Brahmanandam	            80
+Jacob Fleck	        Luise Fleck	                78
+Jesús Franco	    Lina Romay	                77
+Sumiko Kurishima	Yoshinobu Ikeda	            77
+Kaichi Yamamoto	    Takeo Azuma	                74
+Ritoku Arashi	    Shôzô Arashi	            73
+Mustafa Qureshi	    Sultan Rahi	                73
+Rajkumar	        T.N. Balakrishna	        72
+K.S. Ashwath	    T.N. Balakrishna	        72
+Franco Franchi	    Ciccio Ingrassia	        72
+Hideo Fujino	    Takeo Azuma	                71
+Sen'nosuke Nakamura	Kitsuraku Arashi	        71
+Adoor Bhasi	        Sasikumar	                71
+Shirô Nakagawa	    Shôzô Arashi	            68
+Hideo Fujino	    Kaichi Yamamoto	            68
+Matsunosuke Onoe	Kakumatsuro Arashi	        68
+Shin Seong-il	    Yun Jeong-hie	            67
+Sen'nosuke Nakamura	Suminojo Ichikawa	        67
+Sam Newfield	    Al St. John	                67
+Shirôgorô Sawamura	Enjuro Ichikawa	            66
+Jirô Yoshino	    Enjuro Ichikawa	            65
+Adoor Bhasi	        Thikkurissy Sukumaran Nair	65
+Chieko Baishô	    Yôji Yamada	                65
+Nagesh	            Aachi Manorama	            64
